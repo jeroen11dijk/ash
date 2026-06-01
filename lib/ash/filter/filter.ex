@@ -1195,7 +1195,11 @@ defmodule Ash.Filter do
         |> :lists.droplast()
         |> Ash.Query.Aggregate.subpaths()
         |> Enum.reduce_while({:ok, filters}, fn subpath, {:ok, filters} ->
-          last_relationship = last_relationship(query.resource, subpath)
+          # `aggregate.relationship_path` is relative to the aggregate's own
+          # source resource, not `query.resource`. They coincide for top-level
+          # aggregates, but for a nested aggregate the inner aggregate's source
+          # differs from the (target) resource of the query it is loaded under.
+          last_relationship = last_relationship(aggregate.resource, subpath)
 
           add_authorization_path_filter(
             filters,
