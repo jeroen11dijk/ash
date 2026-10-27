@@ -240,7 +240,7 @@ defmodule Ash.Actions.Update.UpdateMany do
           )
 
         action_select =
-          if opts[:return_records?] or notify? or has_after_action? or
+          if opts[:return_records?] || notify? || has_after_action? ||
                not Enum.empty?(conditional_after_batch_hooks) do
             action_select(resource, action, opts)
           else
@@ -276,7 +276,11 @@ defmodule Ash.Actions.Update.UpdateMany do
         # Rows an after_batch hook fails were still written, so they aren't missing.
         seen = Enum.reduce(written, seen, &MapSet.put(&2, Map.take(&1, pkey)))
 
-        # after_batch change callbacks, run the same way an atomic bulk update runs them.
+        changeset_by_pkey = Map.new(targets, &{&1.pkey, &1.changeset})
+
+        # after_batch change callbacks, run the same way an atomic bulk update runs them, except
+        # that each row is paired with its own changeset: rows in a group share atomics, but their
+        # literal values travel as per-row attributes.
         {written, after_batch_errors, after_batch_notifications} =
           if Enum.empty?(conditional_after_batch_hooks) do
             {written, [], []}
@@ -286,11 +290,13 @@ defmodule Ash.Actions.Update.UpdateMany do
               representative,
               all_changes,
               conditional_after_batch_hooks,
-              context
+              context,
+              Enum.map(
+                written,
+                &(Map.get(changeset_by_pkey, Map.take(&1, pkey)) || representative)
+              )
             )
           end
-
-        changeset_by_pkey = Map.new(targets, &{&1.pkey, &1.changeset})
 
         # Run after_action hooks per row with that row's own changeset — the same hooks atomic bulk
         # updates run after their write. The MERGE already happened, so a hook failure is a per-row

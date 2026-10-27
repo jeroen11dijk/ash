@@ -1107,21 +1107,32 @@ defmodule Ash.Actions.Update.Bulk do
     end)
   end
 
+  # `result_changesets`, when given, holds each result's own changeset in the same order as
+  # `results` (as `update_many` has, where rows differ in their attributes); otherwise every
+  # result is paired with `atomic_changeset`.
   @doc false
   def run_atomic_after_batch_hooks(
         results,
         atomic_changeset,
         all_changes,
         conditional_after_batch_hooks,
-        context
+        context,
+        result_changesets \\ nil
       ) do
     atomic_changeset = %{atomic_changeset | phase: :after_action}
+
+    changesets_by_index =
+      (result_changesets || [])
+      |> Stream.with_index()
+      |> Map.new(fn {changeset, index} -> {index, %{changeset | phase: :after_action}} end)
+
+    changeset_at = fn index -> Map.get(changesets_by_index, index, atomic_changeset) end
 
     results =
       results
       |> Stream.with_index()
       |> Enum.map(fn {result, index} ->
-        {atomic_changeset, Ash.Resource.set_metadata(result, %{atomic_index: index})}
+        {changeset_at.(index), Ash.Resource.set_metadata(result, %{atomic_index: index})}
       end)
 
     {records_with_changesets, notifications, errors} =
@@ -1164,8 +1175,10 @@ defmodule Ash.Actions.Update.Bulk do
                         {[], additional_notifications, errors},
                         fn
                           {:ok, record}, {records, additional_notifications, errors} ->
-                            {[{atomic_changeset, record} | records], additional_notifications,
-                             errors}
+                            {[
+                               {changeset_at.(record.__metadata__[:atomic_index]), record}
+                               | records
+                             ], additional_notifications, errors}
 
                           {:error, error}, {records, additional_notifications, errors} ->
                             {records, additional_notifications, [error | errors]}
