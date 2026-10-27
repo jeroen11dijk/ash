@@ -330,47 +330,67 @@ defmodule Ash.Type.NewType do
         Ash.Type.generator(unquote(subtype_of), constraints)
       end
 
-      @impl Ash.Type
-      def handle_change(old_term, new_term, constraints) do
-        constraints = subtype_constraints(constraints)
+      # A subtype without change hooks lets a literal value be cast and stored as a plain
+      # attribute when it is written atomically, instead of becoming an atomic expression.
+      # Delegating hooks it doesn't have would hide that, so they are only defined when the
+      # subtype has them (or can't be asked yet, under `lazy_init?`).
+      if lazy_init? or subtype_of.handle_change?() do
+        @impl Ash.Type
+        def handle_change(old_term, new_term, constraints) do
+          constraints = subtype_constraints(constraints)
 
-        Ash.Type.handle_change(unquote(subtype_of), old_term, new_term, constraints)
+          Ash.Type.handle_change(unquote(subtype_of), old_term, new_term, constraints)
+        end
+
+        defoverridable handle_change: 3
       end
 
-      @impl Ash.Type
-      def handle_change_array(old_term, new_term, constraints) do
-        constraints = subtype_constraints(constraints)
+      if lazy_init? or subtype_of.handle_change_array?() do
+        @impl Ash.Type
+        def handle_change_array(old_term, new_term, constraints) do
+          constraints = subtype_constraints(constraints)
 
-        Ash.Type.handle_change(
-          {:array, unquote(subtype_of)},
-          old_term,
-          new_term,
-          items: constraints
-        )
+          Ash.Type.handle_change(
+            {:array, unquote(subtype_of)},
+            old_term,
+            new_term,
+            items: constraints
+          )
+        end
+
+        defoverridable handle_change_array: 3
       end
 
-      @impl Ash.Type
-      def prepare_change(old_term, new_term, constraints) do
-        constraints = subtype_constraints(constraints)
+      if lazy_init? or subtype_of.prepare_change?() do
+        @impl Ash.Type
+        def prepare_change(old_term, new_term, constraints) do
+          constraints = subtype_constraints(constraints)
 
-        Ash.Type.prepare_change(
-          unquote(subtype_of),
-          old_term,
-          new_term,
-          constraints
-        )
+          Ash.Type.prepare_change(
+            unquote(subtype_of),
+            old_term,
+            new_term,
+            constraints
+          )
+        end
+
+        defoverridable prepare_change: 3
       end
 
-      @impl Ash.Type
-      def prepare_change_array(old_term, new_term, constraints) do
-        constraints = subtype_constraints(constraints)
+      if lazy_init? or subtype_of.prepare_change_array?() do
+        @impl Ash.Type
+        def prepare_change_array(old_term, new_term, constraints) do
+          constraints = subtype_constraints(constraints)
 
-        Ash.Type.prepare_change(
-          {:array, unquote(subtype_of)},
-          old_term,
-          new_term,
-          items: constraints
-        )
+          Ash.Type.prepare_change(
+            {:array, unquote(subtype_of)},
+            old_term,
+            new_term,
+            items: constraints
+          )
+        end
+
+        defoverridable prepare_change_array: 3
       end
 
       @impl Ash.Type
@@ -572,11 +592,7 @@ defmodule Ash.Type.NewType do
                      cast_from_embedded: 2,
                      dump_to_native: 2,
                      generator: 1,
-                     handle_change_array: 3,
-                     handle_change: 3,
                      include_source: 2,
-                     prepare_change_array: 3,
-                     prepare_change: 3,
                      storage_type: 1,
                      type_constraints: 2
     end
