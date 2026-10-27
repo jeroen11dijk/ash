@@ -1107,32 +1107,36 @@ defmodule Ash.Actions.Update.Bulk do
     end)
   end
 
-  # `result_changesets`, when given, holds each result's own changeset in the same order as
-  # `results` (as `update_many` has, where rows differ in their attributes); otherwise every
-  # result is paired with `atomic_changeset`.
   @doc false
   def run_atomic_after_batch_hooks(
         results,
         atomic_changeset,
         all_changes,
         conditional_after_batch_hooks,
-        context,
-        result_changesets \\ nil
+        context
       ) do
-    atomic_changeset = %{atomic_changeset | phase: :after_action}
+    results
+    |> Enum.map(&{atomic_changeset, &1})
+    |> run_after_batch_hooks(all_changes, conditional_after_batch_hooks, context)
+  end
 
-    changesets_by_index =
-      (result_changesets || [])
-      |> Stream.with_index()
-      |> Map.new(fn {changeset, index} -> {index, %{changeset | phase: :after_action}} end)
-
-    changeset_at = fn index -> Map.get(changesets_by_index, index, atomic_changeset) end
+  @doc false
+  def run_after_batch_hooks(
+        changesets_and_results,
+        all_changes,
+        conditional_after_batch_hooks,
+        context
+      ) do
+    changesets =
+      changesets_and_results
+      |> Enum.map(fn {changeset, _result} -> %{changeset | phase: :after_action} end)
+      |> List.to_tuple()
 
     results =
-      results
+      changesets_and_results
       |> Stream.with_index()
-      |> Enum.map(fn {result, index} ->
-        {changeset_at.(index), Ash.Resource.set_metadata(result, %{atomic_index: index})}
+      |> Enum.map(fn {{_changeset, result}, index} ->
+        {elem(changesets, index), Ash.Resource.set_metadata(result, %{atomic_index: index})}
       end)
 
     {records_with_changesets, notifications, errors} =
@@ -1176,7 +1180,7 @@ defmodule Ash.Actions.Update.Bulk do
                         fn
                           {:ok, record}, {records, additional_notifications, errors} ->
                             {[
-                               {changeset_at.(record.__metadata__[:atomic_index]), record}
+                               {elem(changesets, record.__metadata__.atomic_index), record}
                                | records
                              ], additional_notifications, errors}
 

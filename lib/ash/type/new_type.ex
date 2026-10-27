@@ -330,10 +330,6 @@ defmodule Ash.Type.NewType do
         Ash.Type.generator(unquote(subtype_of), constraints)
       end
 
-      # A subtype without change hooks lets a literal value be cast and stored as a plain
-      # attribute when it is written atomically, instead of becoming an atomic expression.
-      # Delegating hooks it doesn't have would hide that, so they are only defined when the
-      # subtype has them (or can't be asked yet, under `lazy_init?`).
       if lazy_init? or subtype_of.handle_change?() do
         @impl Ash.Type
         def handle_change(old_term, new_term, constraints) do

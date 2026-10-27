@@ -278,23 +278,17 @@ defmodule Ash.Actions.Update.UpdateMany do
 
         changeset_by_pkey = Map.new(targets, &{&1.pkey, &1.changeset})
 
-        # after_batch change callbacks, run the same way an atomic bulk update runs them, except
-        # that each row is paired with its own changeset: rows in a group share atomics, but their
-        # literal values travel as per-row attributes.
+        # after_batch change callbacks, run the same way an atomic bulk update runs them.
         {written, after_batch_errors, after_batch_notifications} =
           if Enum.empty?(conditional_after_batch_hooks) do
             {written, [], []}
           else
-            Ash.Actions.Update.Bulk.run_atomic_after_batch_hooks(
-              written,
-              representative,
+            written
+            |> Enum.map(&{Map.get(changeset_by_pkey, Map.take(&1, pkey), representative), &1})
+            |> Ash.Actions.Update.Bulk.run_after_batch_hooks(
               all_changes,
               conditional_after_batch_hooks,
-              context,
-              Enum.map(
-                written,
-                &(Map.get(changeset_by_pkey, Map.take(&1, pkey)) || representative)
-              )
+              context
             )
           end
 
